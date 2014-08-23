@@ -1,38 +1,49 @@
 package com.jherenu.stocks
 
-import spock.lang.IgnoreRest
+import com.jherenu.stocks.common.DateFromStringCreator
+import com.jherenu.stocks.domain.DateShare
+import com.jherenu.stocks.domain.MovementOperation
+import com.jherenu.stocks.domain.OwnedShare
+import com.jherenu.stocks.strategies.SimulatorStrategy
+import com.jherenu.stocks.strategies.Strategy1
 import spock.lang.Specification
 import spock.lang.Unroll
 
 class Strategy1SimulatorSpec extends Specification {
 
     public static final String SHARE_COMPANY_NAME = 'YPF'
+    public static final String ANOTHER_SHARE_COMPANY_NAME = "ANOTHER_SHARE"
     public static final Date OLD_DATE = new Date(2013, 1, 1)
-    StockBrokerSimulator strategySimulator
+    public static final Date END_DATE = new Date(2014, 1, 1)
+    StockBrokerSimulator stockBrokerSimulator
+
+    SimulatorStrategy strategy1
 
     void setup() {
-        Strategy1 strategy1 = new Strategy1()
-        this.strategySimulator = new StockBrokerSimulator(
+        this.strategy1 = new Strategy1()
+        this.stockBrokerSimulator = new StockBrokerSimulator(
             strategy: strategy1,
-            money: 1000000,
-            shares: []
+            money: 1000000
         )
     }
 
     // Buy
     @Unroll
-    void "if buy condition is satisfied with new price = #newPrice _ must consume max amount from \$1000 available to buy shares"() {
+    void "if buy condition is satisfied with new price = #newPrice and don't have to sell every share _ must consume max amount from \$1000 available to buy shares"() {
         given:
-        def initialMoney = this.strategySimulator.getMoney()
+        def initialMoney = this.stockBrokerSimulator.getMoney()
 
-        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,1), price: 101)
-        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,2), price: newPrice)
+        def firstDate = this.dateFromString("2104/1/1")
+        def secondDate = this.dateFromString("2104/1/2")
+        def endDate = this.dateFromString("2104/1/3")
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 102)
+        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: newPrice)
 
         when:
-        this.strategySimulator.simulate([firstDateShare, buyDateShare])
+        this.stockBrokerSimulator.simulate([firstDateShare, buyDateShare], endDate)
 
         then:
-        this.strategySimulator.getMoney() == initialMoney - moneyToConsume
+        this.stockBrokerSimulator.getMoney() == initialMoney - moneyToConsume
 
         where:
         newPrice    | moneyToConsume
@@ -43,19 +54,22 @@ class Strategy1SimulatorSpec extends Specification {
     }
 
     @Unroll
-    void "if buy condition is satisfied with newPrice = #newPrice _ must buy #sharesToBuy shares adding them to the owned shares"() {
+    void "if buy condition is satisfied with newPrice = #newPrice and don't have to sell every share _ must buy #sharesToBuy shares adding them to the owned shares"() {
         given:
-        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,1), price: 101)
-        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,2), price: newPrice)
+        def firstDate = this.dateFromString("2104/1/1")
+        def secondDate = this.dateFromString("2104/1/2")
+        def endDate = this.dateFromString("2104/1/3")
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 102)
+        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: newPrice)
 
         when:
-        this.strategySimulator.simulate([firstDateShare, buyDateShare])
+        this.stockBrokerSimulator.simulate([firstDateShare, buyDateShare], endDate)
 
         then:
-        def justBoughtShares = this.strategySimulator.getShares().findAll { share ->
-            share.companyName == SHARE_COMPANY_NAME && share.buyDate == new Date(2014,1,2) && share.unitPrice == newPrice
-        }
-        justBoughtShares.first().count == sharesToBuy
+        def justBoughtShares = this.stockBrokerSimulator.getOwnedShareForCompanyName(SHARE_COMPANY_NAME)
+        justBoughtShares.companyName == SHARE_COMPANY_NAME
+        justBoughtShares.buyDate == secondDate
+        justBoughtShares.count == sharesToBuy
 
         where:
         newPrice    | sharesToBuy
@@ -65,115 +79,202 @@ class Strategy1SimulatorSpec extends Specification {
         1           | 1000
     }
 
-    void "if buy condition is satisfied and available money is 500 _ must consume max amount from \$500 available to buy shares"() {
+    void "if buy condition is satisfied and don't have to sell every share _ must generate a movement"() {
         given:
-        this.strategySimulator.setMoney(500)
-
-        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,1), price: 101)
-        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,2), price: 100)
+        def firstDate = this.dateFromString("2104/1/1")
+        def secondDate = this.dateFromString("2104/1/2")
+        def endDate = this.dateFromString("2104/1/3")
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 102)
+        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: 100)
 
         when:
-        this.strategySimulator.simulate([firstDateShare, buyDateShare])
+        this.stockBrokerSimulator.simulate([firstDateShare, buyDateShare], endDate)
 
         then:
-        this.strategySimulator.getMoney() == 0
+        def movements = this.stockBrokerSimulator.getMovements()
+        movements.size() == 2
+        def doNothingMovement = movements.first()
+        doNothingMovement.date == firstDate
+        doNothingMovement.operation == MovementOperation.DO_NOTHING
+        doNothingMovement.companyName == SHARE_COMPANY_NAME
+        doNothingMovement.amount == 0
+
+        def buyMovement = movements.last()
+        buyMovement.date == secondDate
+        buyMovement.operation == MovementOperation.BUY
+        buyMovement.companyName == SHARE_COMPANY_NAME
+        buyMovement.amount == -1000
     }
 
-    void "if buy condition is satisfied and available money is 500 _ must buy 5 shares adding them to the owned shares"() {
+    void "buy condition is satisfied and available money is 500 and share value is 100 and don't have to sell every share _ must consume max amount from \$500 available to buy shares"() {
         given:
-        this.strategySimulator.setMoney(500)
+        this.stockBrokerSimulator.setMoney(500)
 
-        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,1), price: 101)
-        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,2), price: 100)
+        def firstDate = dateFromString('2014/01/01')
+        def secondDate = dateFromString('2014/01/02')
+        def endDate = dateFromString('2014/01/03')
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 102)
+        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: 100)
 
         when:
-        this.strategySimulator.simulate([firstDateShare, buyDateShare])
+        this.stockBrokerSimulator.simulate([firstDateShare, buyDateShare], endDate)
 
         then:
-        def justBoughtShares = this.strategySimulator.getShares().findAll { share ->
-            share.companyName == SHARE_COMPANY_NAME && share.buyDate == new Date(2014,1,2) && share.unitPrice == 100
-        }
-        justBoughtShares.first().count == 5
+        this.stockBrokerSimulator.getMoney() == 0
+    }
+
+    void "buy condition is satisfied and available money is 500 and share value is 100 and don't have to sell every share _ must buy 5 shares adding them to the owned shares"() {
+        given:
+        this.stockBrokerSimulator.setMoney(500)
+
+        def firstDate = dateFromString('2014/01/01')
+        def secondDate = dateFromString('2014/01/02')
+        def endDate = dateFromString('2014/01/03')
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 102)
+        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: 100)
+
+        when:
+        this.stockBrokerSimulator.simulate([firstDateShare, buyDateShare], endDate)
+
+        then:
+        def justBoughtShares = this.stockBrokerSimulator.getOwnedShareForCompanyName(SHARE_COMPANY_NAME)
+        justBoughtShares.count == 5
+        justBoughtShares.buyDate == secondDate
+        justBoughtShares.companyName == SHARE_COMPANY_NAME
     }
 
     // Sell
-
-    void "if sell condition is satisfied _ must sell every share from that company so money must increase to #endMoney"() {
+    @Unroll
+    void "sell condition is satisfied and don't have to sell every share _ must sell every share from that company so money must increase to #endMoney"() {
         given:
-        this.strategySimulator.addToShares(createOldShare())
+        this.stockBrokerSimulator.addToShares(createOldShare())
 
-        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,1), price: 100)
-        DateShare sellDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,2), price: sharePrice)
+        def firstDate = dateFromString('2014/01/01')
+        def secondDate = dateFromString('2014/01/02')
+        def endDate = dateFromString('2014/01/03')
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 100)
+        DateShare sellDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: sharePrice)
 
         when:
-        this.strategySimulator.simulate([firstDateShare, sellDateShare])
+        this.stockBrokerSimulator.simulate([firstDateShare, sellDateShare], endDate)
 
         then:
-        this.strategySimulator.getMoney() == endMoney
+        this.stockBrokerSimulator.getMoney() == endMoney
 
         where:
-        sharePrice | endMoney
+        sharePrice          | endMoney
         102                 | 1001020
         150                 | 1001500
         1000                | 1010000
     }
 
-    void "if sell condition is satisfied _ must sell every share from that company so they are not owned any more"() {
+    void "if sell condition is satisfied and don't have to sell every share _ must sell every share from that company so they are not owned any more"() {
         given:
-        this.strategySimulator.addToShares(createOldShare())
+        this.stockBrokerSimulator.addToShares(createOldShare())
 
-        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,1), price: 100)
-        DateShare sellDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,2), price: 102)
+        def firstDate = dateFromString('2014/01/01')
+        def secondDate = dateFromString('2014/01/02')
+        def endDate = dateFromString('2014/01/03')
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 100)
+        DateShare sellDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: 102)
 
-        assert this.strategySimulator.getShares().find { it.companyName == SHARE_COMPANY_NAME} != null
+        assert this.stockBrokerSimulator.getOwnedShareForCompanyName(SHARE_COMPANY_NAME) != null
 
         when:
-        this.strategySimulator.simulate([firstDateShare, sellDateShare])
+        this.stockBrokerSimulator.simulate([firstDateShare, sellDateShare], endDate)
 
         then:
-        this.strategySimulator.getShares().find { it.companyName == SHARE_COMPANY_NAME} == null
+        this.stockBrokerSimulator.getOwnedShareForCompanyName(SHARE_COMPANY_NAME) == null
+    }
+
+    void "sell condition is satisfied and don't have to sell every share _ must generate movements for every operation"() {
+        given:
+        this.stockBrokerSimulator.addToShares(createOldShare())
+
+        def firstDate = dateFromString('2014/01/01')
+        def secondDate = dateFromString('2014/01/02')
+        def endDate = dateFromString('2014/01/03')
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 100)
+        DateShare sellDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: secondDate, price: 102)
+
+        assert this.stockBrokerSimulator.getOwnedShareForCompanyName(SHARE_COMPANY_NAME) != null
+
+        when:
+        this.stockBrokerSimulator.simulate([firstDateShare, sellDateShare], endDate)
+
+        then:
+        def movements = this.stockBrokerSimulator.getMovements()
+        movements.size() == 2
+        def doNothingMovement = movements.first()
+        doNothingMovement.date == firstDate
+        doNothingMovement.operation == MovementOperation.DO_NOTHING
+        doNothingMovement.companyName == SHARE_COMPANY_NAME
+        doNothingMovement.amount == 0
+
+        def buyMovement = movements.last()
+        buyMovement.date == secondDate
+        buyMovement.operation == MovementOperation.SELL
+        buyMovement.companyName == SHARE_COMPANY_NAME
+        buyMovement.amount == 1020
     }
 
     // The rest
-
     void "if there is no share data from yesterday _ it must do nothing"() {
         given:
         def initialMoney = 500
-        this.strategySimulator.setMoney(initialMoney)
-        this.strategySimulator.addToShares(createOldShare())
+        this.stockBrokerSimulator.setMoney(initialMoney)
+        this.stockBrokerSimulator.addToShares(createOldShare())
 
         // 2014-1-1 is not 2014-1-3 yesterday
-        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,1), price: 101)
-        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: new Date(2014,1,3), price: 101)
+        def firstDate = dateFromString('2014/01/01')
+        def thirdDate = dateFromString('2014/01/03')
+        def endDate =  dateFromString('2014/01/04')
+        DateShare firstDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: firstDate, price: 101)
+        DateShare buyDateShare = new DateShare(companyName: SHARE_COMPANY_NAME, date: thirdDate, price: 101)
 
         when:
-        this.strategySimulator.simulate([firstDateShare, buyDateShare])
+        this.stockBrokerSimulator.simulate([firstDateShare, buyDateShare], endDate)
 
         then:
-        this.strategySimulator.getMoney() == 500
+        this.stockBrokerSimulator.getMoney() == 500
         and:
-        this.strategySimulator.getShares().size() == 1
-        this.strategySimulator.getShares().find { it.companyName == SHARE_COMPANY_NAME && it.buyDate == OLD_DATE }
+        this.stockBrokerSimulator.getShares().size() == 1
+        def justBoughtShares = this.stockBrokerSimulator.getOwnedShareForCompanyName(SHARE_COMPANY_NAME)
+        justBoughtShares.buyDate == OLD_DATE
+        justBoughtShares.companyName == SHARE_COMPANY_NAME
     }
 
-    @IgnoreRest
-    void "calculate simulation from example must return endMoney = XXX"() {
+
+    void "when the end is reached and shares are still owned must sell every share with date price"() {
         given:
-        def dateShares = DateSharesFixture.createBigExample()
+        this.stockBrokerSimulator.setMoney(0)
+
+        def ownedShare = createOldShare()
+        def anotherOwnedShare = createOldShare(ANOTHER_SHARE_COMPANY_NAME)
+        this.stockBrokerSimulator.addToShares(ownedShare)
+        this.stockBrokerSimulator.addToShares(anotherOwnedShare)
+
+        and: "date shares"
+        DateShare shareDate = new DateShare(companyName: SHARE_COMPANY_NAME, date: END_DATE, price: 100)
+        DateShare anotherShareDate = new DateShare(companyName: ANOTHER_SHARE_COMPANY_NAME, date: END_DATE, price: 50)
+        def sellDateShares = [shareDate, anotherShareDate]
 
         when:
-        this.strategySimulator.simulate(dateShares)
+        this.stockBrokerSimulator.simulate(sellDateShares, END_DATE)
 
         then:
-        this.strategySimulator.getMoney() == 3000
+        this.stockBrokerSimulator.getMoney() == 1500
     }
 
-    def createOldShare() {
-        return new OwnedShare(companyName: SHARE_COMPANY_NAME,
+    def createOldShare(companyName = SHARE_COMPANY_NAME) {
+        return new OwnedShare(companyName: companyName,
                 buyDate: OLD_DATE,
-                count: 10,
-                unitPrice: 103
+                count: 10
         )
+    }
+
+    def dateFromString(dateString) {
+        DateFromStringCreator.createFromFormat(dateString)
     }
 
 

@@ -4,6 +4,8 @@ apply plugin: 'application'
 
 version = '1.0'
 
+mainClassName = "com.jherenu.stocks.Main"
+
 repositories {
     mavenCentral()
 }
@@ -19,5 +21,11 @@ task makeDirs(description : 'make all dirs for project setup') << {
     sources*.allSource*.srcDirs.flatten().each { File srcDir ->
         println "making $srcDir"
         srcDir.mkdirs()
+    }
+}
+
+run {
+    if ( project.hasProperty("appArgs") ) {
+        args Eval.me(appArgs)
     }
 }
