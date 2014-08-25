@@ -16,6 +16,11 @@ class StockBrokerSimulatorDecider {
             return stockBrokerSimulator
         }
 
-        return stockBrokerSimulators
+        stockBrokerSimulators.each {
+            println it.toString()
+        }
+
+        def winnerStrategy = stockBrokerSimulators.max { it.getMoney() }.getStrategy()
+        println "The winner strategy is: ${winnerStrategy}"
     }
 }

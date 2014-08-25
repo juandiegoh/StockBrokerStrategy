@@ -4,7 +4,15 @@ import com.jherenu.stocks.domain.DateShare
 
 class DateShareFileReader {
 
-    static def parseFile(inputStreamCreatorClosure) {
+    static def parseFileFromResource(fileName) {
+        this.parseFile() { Thread.currentThread().getContextClassLoader().getResourceAsStream(fileName) }
+    }
+
+    static def parseFromFile(fileName) {
+        this.parseFile() { new FileInputStream(fileName) }
+    }
+
+    private static def parseFile(inputStreamCreatorClosure) {
         InputStream inputFile = inputStreamCreatorClosure()
         String[] lines = inputFile.text.split('\n')
         List<String[]> rows = lines.collect {it.split(';')}
@@ -14,13 +22,6 @@ class DateShareFileReader {
         }
     }
 
-    static def parseFileFromResource(fileName) {
-        this.parseFile() { Thread.currentThread().getContextClassLoader().getResourceAsStream(fileName) }
-    }
-
-    static def parseFromFile(fileName) {
-        this.parseFile() { new FileInputStream(fileName) }
-    }
 
     static BigDecimal getPriceFromString(String priceString) {
         def priceToNum = priceString.replace('$', '').replace(",", ".")
