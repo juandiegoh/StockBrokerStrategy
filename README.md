@@ -1,9 +1,9 @@
 HOW TO RUN
 ==========
 
-gradle run -PappArgs="['file_path']"
+* `gradle run -PappArgs="['file_path']"`
 
-ie: gradle run -PappArgs="['./src/test/resources/bigger_example.csv']"
+* ie: `gradle run -PappArgs="['./src/test/resources/bigger_example.csv']"`
 
 The file must have the format like the ones in src/test/resources
 
@@ -38,7 +38,7 @@ Tener en cuenta que
 -Realizar el ejercicio mediante TDD 
 
 Ejemplo del listado de acciones con su cotización: 
-Accion, Fecha, Precio 
+`Accion, Fecha, Precio
 YPF; 1/4/2014; $290
 TS; 1/4/2014; $215,5
 GGAL; 1/4/2014; $13,45
@@ -47,5 +47,5 @@ TS; 2/4/2014; $216,5
 GGAL; 2/4/2014; $13,25
 YPF; 3/4/2014; $288
 TS; 3/4/2014; $216
-GGAL; 3/4/2014; $12,80
+GGAL; 3/4/2014; $12,80`
 etc...
